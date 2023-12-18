@@ -14,7 +14,7 @@ options = Options()
 
 # Initialize the WebDriver
 driver = webdriver.Firefox(service=service, options=options)
-timeout = 8
+timeout = 18
 
 
 # Open the website
@@ -27,8 +27,8 @@ login_button = WebDriverWait(driver, timeout).until(
 )
 login_button.click()
 
-# Wait until the PIN input field is visible
-pin_input_xpath = "//input[@name='password']"  # Update this XPath if needed
+# Wait until the PIN input field is visible and then loop through
+pin_input_xpath = "//input[contains(@type,'password')]"  
 pin_input = WebDriverWait(driver, timeout).until(
     EC.visibility_of_element_located((By.XPATH, pin_input_xpath))
 )
@@ -39,7 +39,6 @@ while True:
     if len(pin_value) == 4:
         break
     time.sleep(0.5)  # Check every half second
-
 # Wait for an additional 5 seconds after 4 characters are entered
 time.sleep(5)
 
@@ -59,7 +58,7 @@ casino_menu_item = WebDriverWait(driver, timeout).until(
 #casino_menu_item = driver.find_element(By.XPATH, casino_menu_item_xpath)
 casino_menu_item.click()
 
-# Find Aviato game in Casino and click on it
+# Find Aviator game in Casino and click on it
 aviator_game_xpath = "//div[@class='card-item-text'][contains(.,'Aviator')]"
 aviator_game = WebDriverWait(driver, timeout).until(
     EC.element_to_be_clickable((By.XPATH, aviator_game_xpath))
@@ -81,7 +80,7 @@ print(amount_value)
 
 stake_amount = 0.33 * int(amount_value)
 stake_input_xpath = "//input[contains(@type,'text')])[1]"
-bet_button_xpath = "(//span[contains(.,'Bet 1.00 XAF')])[1]"
+bet_button_xpath = "(//span[contains(.,'Bet  XAF')])[1]"
 
 
 # Get the balance amount, ensure it's parsed into a usable format (e.g., removing currency symbols or commas)
@@ -94,27 +93,44 @@ amount_value = float(amount_text) if amount_text else 0
 # Calculate the stake amount as 33% of the balance
 stake_amount = 0.33 * amount_value
 
-# Find the stake input field
-stake_input = WebDriverWait(driver, timeout).until(
-    EC.presence_of_element_located((By.XPATH, stake_input_xpath))
+
+##################                Read past results      ############
+# Find History icon and click on it
+history_icon_xpath = "//div[@class='history-icon']"
+history_icon = WebDriverWait(driver, timeout).until(
+    EC.presence_of_element_located((By.XPATH, history_icon_xpath))
 )
+history_icon.click()
 
-# Clear the stake input field
-stake_input.clear()
+# Find all elements with class 'bubble-multiplier'
+past_results = driver.find_elements(By.CLASS_NAME, 'bubble-multiplier')
 
-# Input the calculated stake amount
-stake_input.send_keys(str(stake_amount))
+# Process the elements to extract and clean the text
+results = []
+for element in past_results:
+    text = element.text.replace("x", "").strip()
+    if text:
+        results.append(text)
 
-# Wait for the bet button to be clickable
-bet_button = WebDriverWait(driver, timeout).until(
-    EC.element_to_be_clickable((By.XPATH, bet_button_xpath))
-)
+# Print the results
+print(results)
 
-# Click on the bet button
-bet_button.click()
+# # Find the stake input field
+# stake_input = WebDriverWait(driver, timeout).until(
+#     EC.presence_of_element_located((By.XPATH, stake_input_xpath))
+# )
 
-# ... continue with the rest of your code
+# # Clear the stake input field
+# stake_input.clear()
 
+# # Input the calculated stake amount
+# stake_input.send_keys(str(stake_amount))
 
+# # Wait for the bet button to be clickable
+# bet_button = WebDriverWait(driver, timeout).until(
+#     EC.element_to_be_clickable((By.XPATH, bet_button_xpath))
+# )
 
-# Continue with the rest of your code
+# # Click on the bet button
+# bet_button.click()
+
