@@ -5,7 +5,14 @@ from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 import time
+from decimal import Decimal
+
+## Machine Learning Imports
+import torch
+import torch.nn as nn
+from torch.utils.data import TensorDataset, DataLoader
 
 geckodriver_path = './geeko/geckodriver.exe'
 # Create a Service object pointing to the geckodriver executable
@@ -72,7 +79,7 @@ stake_amount_xpath = "(//input[@type='text'])[1]"
 read_amount = WebDriverWait(driver, timeout).until(
     EC.presence_of_element_located((By.XPATH, balance_amount_xpath))
 )
-amount_value = read_amount.text
+amount_value = float(read_amount.text)
 print(amount_value)
 
 
@@ -94,6 +101,24 @@ amount_value = float(amount_text) if amount_text else 0
 stake_amount = 0.33 * amount_value
 
 
+################## Start and Stop point #############
+start_and_stop_xpath = "//div[contains(@class,'dom-container')]"
+text_to_wait_for = "Flew Away!"
+while True:
+    try:
+        # Check for the text, with a short timeout for each iteration
+        WebDriverWait(driver, 5).until(
+            EC.text_to_be_present_in_element(
+                (By.XPATH, start_and_stop_xpath), text_to_wait_for
+            )
+        )
+        print("Hurray")  # Text found, print message
+        break  # Exit the loop
+    except TimeoutException:
+        # If timeout occurs, catch the exception and continue the loop
+        continue
+
+
 ##################                Read past results      ############
 # Find History icon and click on it
 history_icon_xpath = "//div[@class='history-icon']"
@@ -108,12 +133,83 @@ past_results = driver.find_elements(By.CLASS_NAME, 'bubble-multiplier')
 # Process the elements to extract and clean the text
 results = []
 for element in past_results:
-    text = element.text.replace("x", "").strip()
-    if text:
-        results.append(text)
+    result_item = element.text.replace("x", "").strip()
+    if result_item:
+        results.append(float(result_item))
 
 # Print the results
 print(results)
+
+
+################ Predict the next result ########################
+data = results  # Example data, replace with your actual dataset
+
+# Convert the data to a PyTorch tensor
+data_tensor = torch.FloatTensor(data)
+
+# Create sequences of 30 numbers
+seq_length = 8
+sequences = [data_tensor[i:i + seq_length] for i in range(len(data_tensor) - seq_length)]
+targets = data_tensor[seq_length:]
+
+# Prepare the dataset and dataloader
+# Ensure that sequences and targets have the same size
+assert len(sequences) == len(targets), "Size mismatch between sequences and targets"
+dataset = TensorDataset(torch.stack(sequences), targets)
+loader = DataLoader(dataset, batch_size=64, shuffle=True)
+
+# Define the LSTM model
+class LSTMModel(nn.Module):
+    def __init__(self, input_size=1, hidden_size=50, num_layers=2):
+        super(LSTMModel, self).__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        x, _ = self.lstm(x)
+        x = self.fc(x[:, -1, :])
+        return x
+
+# Instantiate the model
+model = LSTMModel()
+
+# Define loss function and optimizer
+criterion = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+# ...
+
+# Training loop
+num_epochs = 30  # Increase the number of epochs
+for epoch in range(num_epochs):
+    for seqs, targets in loader:
+        # Reshape sequences for LSTM input
+        seqs = seqs.view(-1, seq_length, 1)
+
+        # Forward pass
+        outputs = model(seqs)
+        loss = criterion(outputs, targets.view(-1, 1))
+
+        # Backward pass and optimization
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+
+# ...
+
+
+# Predict the next number in the sequence
+# Here, we use the last sequence from the data for prediction
+last_seq = data_tensor[-seq_length:].view(1, seq_length, 1)  # Ensure correct dimension for a single sequence
+predicted_number = model(last_seq).item()
+print(f'Predicted next number: {predicted_number}')
+
+if predicted_number > 1.2:
+    print("We might Stake")
+else:
+    print("No luck, we try again")
 
 # # Find the stake input field
 # stake_input = WebDriverWait(driver, timeout).until(
