@@ -76,16 +76,16 @@ balance_amount_xpath = "//span[contains(@class,'amount font-weight-bold')]"
 stake_amount_xpath = "(//input[@type='text'])[1]"
 
 #read_amount = driver.find_element(By.XPATH, read_amount_xpath)
-read_amount = WebDriverWait(driver, timeout).until(
+read_balance = WebDriverWait(driver, timeout).until(
     EC.presence_of_element_located((By.XPATH, balance_amount_xpath))
 )
-amount_value = float(read_amount.text)
-print(amount_value)
+balance_value = float(read_balance.text)
+print(balance_value)
 
 
 # Setstake amount
 
-stake_amount = 0.33 * int(amount_value)
+stake_amount = 0.33 * int(balance_value)
 stake_input_xpath = "//input[contains(@type,'text')])[1]"
 bet_button_xpath = "(//span[contains(.,'Bet  XAF')])[1]"
 
@@ -101,22 +101,34 @@ amount_value = float(amount_text) if amount_text else 0
 stake_amount = 0.33 * amount_value
 
 
-################## Start and Stop point #############
-start_and_stop_xpath = "//div[contains(@class,'dom-container')]"
-text_to_wait_for = "Flew Away!"
-while True:
+################## Start and Stop point ########################
+
+# Read the last result 
+last_result_xpath = "(//div[@class='bubble-multiplier font-weight-bold'])[1]"
+def get_last_result_text(driver, xpath):
     try:
-        # Check for the text, with a short timeout for each iteration
-        WebDriverWait(driver, 5).until(
-            EC.text_to_be_present_in_element(
-                (By.XPATH, start_and_stop_xpath), text_to_wait_for
-            )
-        )
-        print("Hurray")  # Text found, print message
-        break  # Exit the loop
-    except TimeoutException:
-        # If timeout occurs, catch the exception and continue the loop
-        continue
+        element = driver.find_element(By.XPATH, xpath)
+        return element.text.strip()
+    except Exception as e:
+        print(f"Error retrieving text: {e}")
+        return None
+    
+last_known_result = get_last_result_text(driver, last_result_xpath)
+
+while True:
+    current_result = get_last_result_text(driver, last_result_xpath)
+    
+    if current_result != last_known_result:
+        print("Change detected! Proceeding with the script...")
+        break
+    else:
+        print("No change detected, checking again...")
+        time.sleep(1)  # Wait 1 second before checking again
+
+    last_known_result = current_result
+
+
+
 
 
 ##################                Read past results      ############
