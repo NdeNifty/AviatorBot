@@ -10,7 +10,7 @@ data = results  # Example data, replace with your actual dataset
 data_tensor = torch.FloatTensor(data)
 
 # Create sequences of 30 numbers
-seq_length = 8
+seq_length = 5
 sequences = [data_tensor[i:i + seq_length] for i in range(len(data_tensor) - seq_length)]
 targets = data_tensor[seq_length:]
 
@@ -42,7 +42,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 # ...
 
 # Training loop
-num_epochs = 30  # Increase the number of epochs
+num_epochs = 25  # Increase the number of epochs
 for epoch in range(num_epochs):
     for seqs, targets in loader:
         # Reshape sequences for LSTM input
