@@ -6,6 +6,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+import keras_ocr
+from PIL import Image
+from io import BytesIO
+import pytesseract
 import time
 from decimal import Decimal
 
@@ -13,6 +17,9 @@ from decimal import Decimal
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
+
+# Set up the OCR pipeline
+pipeline = keras_ocr.pipeline.Pipeline()
 
 geckodriver_path = './geeko/geckodriver.exe'
 # Create a Service object pointing to the geckodriver executable
@@ -73,7 +80,7 @@ aviator_game = WebDriverWait(driver, timeout).until(
 aviator_game.click()
 
 balance_amount_xpath = "//span[contains(@class,'amount font-weight-bold')]"
-stake_amount_xpath = "(//input[@type='text'])[1]"
+stake_amount_xpath = "(//input[contains(@type,'text')])[1]"
 
 #read_amount = driver.find_element(By.XPATH, read_amount_xpath)
 read_balance = WebDriverWait(driver, timeout).until(
@@ -83,25 +90,32 @@ balance_value = float(read_balance.text)
 print(balance_value)
 
 
-# Setstake amount
-
-stake_amount = 0.33 * int(balance_value)
-stake_input_xpath = "//input[contains(@type,'text')])[1]"
-bet_button_xpath = "(//span[contains(.,'Bet  XAF')])[1]"
-
-
-# Get the balance amount, ensure it's parsed into a usable format (e.g., removing currency symbols or commas)
-balance_amount = WebDriverWait(driver, timeout).until(
-    EC.presence_of_element_located((By.XPATH, balance_amount_xpath))
-)
-amount_text = balance_amount.text.replace('XAF', '').replace(',', '').strip()  # Adjust this line based on the actual text format
-amount_value = float(amount_text) if amount_text else 0
-
-# Calculate the stake amount as 33% of the balance
-stake_amount = 0.33 * amount_value
 
 def avaitor_bot():
     ################## Start and Stop point ########################
+
+
+
+    # Setstake amount
+
+    stake_amount = 0.33 * int(balance_value)
+    #stake_input_xpath = "//input[contains(@type,'text')])[1]"
+    bet_button_xpath = "(//span[contains(.,'Bet')])[1]"
+
+
+    # Get the balance amount, ensure it's parsed into a usable format (e.g., removing currency symbols or commas)
+    balance_amount = WebDriverWait(driver, timeout).until(
+        EC.presence_of_element_located((By.XPATH, balance_amount_xpath))
+    )
+    amount_text = balance_amount.text.replace('XAF', '').replace(',', '').strip()  # Adjust this line based on the actual text format
+    amount_value = float(amount_text) if amount_text else 0
+
+    # Calculate the stake amount as 33% of the balance
+    stake_amount = 0.33 * amount_value
+
+
+
+
 
     # Read the last result 
     last_result_xpath = "(//div[@class='bubble-multiplier font-weight-bold'])[1]"
@@ -154,13 +168,13 @@ def avaitor_bot():
 
 
     ################ Predict the next result ########################
-    data = results  # Example data, replace with your actual dataset
+    data = results  
 
     # Convert the data to a PyTorch tensor
     data_tensor = torch.FloatTensor(data)
 
     # Create sequences of 30 numbers
-    seq_length = 5
+    seq_length = 8
     sequences = [data_tensor[i:i + seq_length] for i in range(len(data_tensor) - seq_length)]
     targets = data_tensor[seq_length:]
 
@@ -218,36 +232,92 @@ def avaitor_bot():
     predicted_number = model(last_seq).item()
     print(f'Predicted next number: {predicted_number}')
 
-    if predicted_number > 1.2:
+    if predicted_number > 2.2:
         print("We might Stake")
-    else:
-        print("No luck, we try again")
+        # Find the stake input field
+        stake_input = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, stake_amount_xpath))
+        )
+        
+        # Clear the stake input field
+        stake_input.clear()
 
-    # Find History icon and click on it
-    close_history_icon = WebDriverWait(driver, timeout).until(
-        EC.presence_of_element_located((By.XPATH, history_icon_xpath))
-    )
-    close_history_icon.click()
+        # Input the calculated stake amount
+        stake_input.send_keys(str(stake_amount))
+
+        # Wait for the bet button to be clickable
+        bet_button = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable((By.XPATH, bet_button_xpath))
+        )
+        
+        # Click on the bet button
+        bet_button.click()
+
+
+        # Use OCR to determine the exit point
+        canvas_container_xpath = "//div[contains(@class,'dom-container')]"
+        # Main loop
+
+        # ... [previous code]
+        found = False
+        while not found:
+            try:
+                # Locate the element and take a screenshot
+                canvas = WebDriverWait(driver, timeout).until(
+                    EC.element_to_be_clickable((By.XPATH, canvas_container_xpath))
+                )
+                print("Canvas located, taking screenshot...")
+                canvas_png = canvas.screenshot_as_png  # Take screenshot of the element
+
+                # Use PIL to open the image
+                image = Image.open(BytesIO(canvas_png))
+
+                # If the image is successfully captured, proceed with OCR
+                try:
+                    # Use keras-ocr to detect and recognize text
+                    prediction_groups = pipeline.recognize([image])
+
+                    # Check if the desired text is in the OCR results
+                    for text, box in prediction_groups[0]:
+                        if "1.8" in text:
+                            print("Found 1.8")
+                            found = True
+                            bet_button.click()
+                            break
+
+                    if not found:
+                        print("Game on....")
+                        time.sleep(1)
+
+                except Exception as e:
+                    print(f"An error occurred during OCR processing: {e}")
+                    break  # Exit the loop or handle the error appropriately
+
+            except Exception as e:
+                print(f"An error occurred while taking a screenshot or opening the image: {e}")
+                break  # Exit the loop or handle the error appropriately
+
+
+
+        
+        # ... [rest of the code]
+
+                
+        else:
+            print("Too Risky, We try again.")
+
+        # Find History icon and click on it
+        close_history_icon = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, history_icon_xpath))
+        )
+        close_history_icon.click()
+
 
 while True:
     avaitor_bot()
 
-# # Find the stake input field
-# stake_input = WebDriverWait(driver, timeout).until(
-#     EC.presence_of_element_located((By.XPATH, stake_input_xpath))
-# )
 
-# # Clear the stake input field
-# stake_input.clear()
+ 
 
-# # Input the calculated stake amount
-# stake_input.send_keys(str(stake_amount))
 
-# # Wait for the bet button to be clickable
-# bet_button = WebDriverWait(driver, timeout).until(
-#     EC.element_to_be_clickable((By.XPATH, bet_button_xpath))
-# )
-
-# # Click on the bet button
-# bet_button.click()
 
